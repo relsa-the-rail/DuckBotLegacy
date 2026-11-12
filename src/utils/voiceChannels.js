@@ -30,7 +30,9 @@ async function GetTextChannel(channel, guildData) {
 	}
 
 	let channels = await channel.guild.channels.fetch()
-	return channels.find(chn => chn.parentId == guildData.VoiceTextCategory && chn.topic == channel.id) || false
+	// fetch() without an id can yield `null` entries for channel types this
+	// discord.js version does not know about, so guard against them.
+	return channels.find(chn => chn?.parentId == guildData.VoiceTextCategory && chn?.topic == channel.id) || false
 }
 
 async function GetVoiceChannel(channel) {
