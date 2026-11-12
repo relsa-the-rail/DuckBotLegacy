@@ -1,5 +1,5 @@
 FROM node:22-alpine
-LABEL org.opencontainers.image.source="https://github.com/dead0duck/duckbot"
+LABEL org.opencontainers.image.source="https://github.com/relsa-the-rail/DuckBotLegacy"
 
 WORKDIR /app
 
