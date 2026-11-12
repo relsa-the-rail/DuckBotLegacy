@@ -5,6 +5,10 @@ module.exports = (clientId) => {
 	const fs = require('node:fs');
 	const path = require('node:path');
 
+	// Populated once commands are registered below; defined up-front so
+	// consumers (e.g. voiceStateUpdate) never read it while undefined.
+	process.disCmds = {}
+
 	const commandsExclusive = {};
 	const commands = [];
 	// Grab all the command folders from the commands directory you created earlier
@@ -39,7 +43,7 @@ module.exports = (clientId) => {
 	const rest = new REST().setToken(token);
 
 	// and deploy your commands!
-	(async () => {
+	return (async () => {
 		try {
 			console.log(`Started refreshing ${commands.length} application (/) commands.`);
 

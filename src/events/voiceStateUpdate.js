@@ -5,13 +5,15 @@ const VoiceCmd = require('../commands/utility/voice')
 function VoiceCommandsList()
 {
 	let voiceCmdBuilder = VoiceCmd.data
-	let voiceCmdId = process.disCmds.voice
+	let voiceCmdId = process.disCmds?.voice
 	let text = `## Список команд:`
 	voiceCmdBuilder.options.forEach(subcmd => {
 		if (!subcmd instanceof SlashCommandSubcommandBuilder)
 			return
 
-		text += `\n1. </voice ${subcmd.name}:${voiceCmdId}> - ${subcmd.description}`
+		text += voiceCmdId
+			? `\n1. </voice ${subcmd.name}:${voiceCmdId}> - ${subcmd.description}`
+			: `\n1. /voice ${subcmd.name} - ${subcmd.description}`
 	})
 
 	return text

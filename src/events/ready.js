@@ -6,7 +6,7 @@ module.exports = {
 	name: Events.ClientReady,
 	execute: async (client) => {
 		console.log(`Ready! Looogged in as ${client.user.tag}`);
-		require("../deploy-commands")(client.user.id)
+		await require("../deploy-commands")(client.user.id)
 
 		process.disClient = client
 		process.mongo = require('../mongodb')
