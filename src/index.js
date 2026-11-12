@@ -68,6 +68,11 @@ for (const file of interactionsFiles) {
 }
 
 
+// Shared globals used by event/command handlers. Set before login so they
+// are available to any gateway event, not just after ClientReady.
+process.disClient = client
+process.mongo = require('./mongodb')
+
 client.login(token);
 
 // Graceful shutdown so `docker compose stop`/`down` and Ctrl+C exit cleanly.

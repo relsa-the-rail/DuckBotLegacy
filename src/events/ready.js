@@ -6,10 +6,8 @@ module.exports = {
 	name: Events.ClientReady,
 	execute: async (client) => {
 		console.log(`Ready! Looogged in as ${client.user.tag}`);
-		await require("../deploy-commands")(client.user.id)
 
-		process.disClient = client
-		process.mongo = require('../mongodb')
+		await require("../deploy-commands")(client.user.id)
 
 		client.user.setPresence({
 			activities: [{ name: `v${version}`, type: ActivityType.Custom }],
