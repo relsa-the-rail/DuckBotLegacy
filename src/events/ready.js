@@ -1,6 +1,6 @@
 const { Events, ActivityType } = require('discord.js');
 const { GuildInitialize, Parties, Moderation, VoiceRegions, RoleDividers } = require('../utils')
-const { version } = require('../package.json');
+const { version } = require('../../package.json');
 
 module.exports = {
 	name: Events.ClientReady,

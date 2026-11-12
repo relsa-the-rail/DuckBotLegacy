@@ -1,5 +1,6 @@
 const fs = require('fs');
-const partyFAQString = fs.readFileSync('bigstrings/partyfaq.md').toString('utf-8');
+const path = require('path');
+const partyFAQString = fs.readFileSync(path.join(__dirname, '..', 'bigstrings', 'partyfaq.md')).toString('utf-8');
 
 module.exports = {
     checkMany: async (client) => {

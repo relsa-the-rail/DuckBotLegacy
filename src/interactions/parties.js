@@ -5,8 +5,9 @@ const isBetween = require('dayjs/plugin/isBetween')
 dayjs.extend(customParseFormat)
 dayjs.extend(isBetween)
 const fs = require('fs')
-const adjectives = fs.readFileSync('bigstrings/adjectives.txt').toString('utf-8').split('\n')
-const nouns = fs.readFileSync('bigstrings/nouns.txt').toString('utf-8').split('\n')
+const path = require('path')
+const adjectives = fs.readFileSync(path.join(__dirname, '..', 'bigstrings', 'adjectives.txt')).toString('utf-8').split('\n')
+const nouns = fs.readFileSync(path.join(__dirname, '..', 'bigstrings', 'nouns.txt')).toString('utf-8').split('\n')
 
 const interId = 'pt'
 

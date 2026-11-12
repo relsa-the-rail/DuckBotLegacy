@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 
-prepare: ## Create app/.env from the template if it is missing
-	@if [ ! -f ./app/.env ]; then cp ./app/.env.default ./app/.env; fi
+prepare: ## Create .env from the template if it is missing
+	@if [ ! -f ./.env ]; then cp ./.env.default ./.env; fi
 
 up: prepare ## Build and start the bot and database in the background
 	@docker compose up -d --build
