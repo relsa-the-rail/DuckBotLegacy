@@ -185,9 +185,9 @@ module.exports = {
 		const { GuildSchema } = process.mongo
 
 		try {
-			const guildData = await GuildSchema.findOne({ Guild: guild.id })
+			let guildData = await GuildSchema.findOne({ Guild: guild.id })
 			if (!guildData) {
-				await GuildSchema.create({
+				guildData = await GuildSchema.create({
 					Guild: guild.id,
 					DataVersion: 2,
 					Warnings: Array[null],
