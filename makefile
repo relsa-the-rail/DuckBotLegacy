@@ -1,29 +1,27 @@
-prepare:
+.DEFAULT_GOAL := help
+
+prepare: ## Create app/.env from the template if it is missing
 	@if [ ! -f ./app/.env ]; then cp ./app/.env.default ./app/.env; fi
-	@docker volume create duck-node_modules
 
-run:
-	@make prepare
-	@docker compose up -d
-	@docker attach duckbot
+up: prepare ## Build and start the bot and database in the background
+	@docker compose up -d --build
 
-restart:
-	@make stop
-	@make run
+restart: prepare ## Rebuild and restart just the bot
+	@docker compose up -d --build --force-recreate duckbot
 
-push:
-	@docker push ghcr.io/dead0duck/duckbot:latest
+logs: ## Follow the bot logs
+	@docker compose logs -f duckbot
 
-build:
-	@docker-compose build --no-cache
+shell: ## Open a shell inside the running bot container
+	@docker compose exec duckbot sh
 
-stop:
+build: ## Build the bot image
+	@docker compose build
+
+down: ## Stop and remove the containers
 	@docker compose down
 
-cleanup:
-	@make stop
-	@docker image rm dead0duck/duckbot
+help: ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
 
-attach:
-	@docker logs -n 100 duckbot
-	@docker attach duckbot
+.PHONY: prepare up restart logs shell build down help

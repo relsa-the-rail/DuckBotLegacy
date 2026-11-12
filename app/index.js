@@ -68,5 +68,13 @@ for (const file of interactionsFiles) {
 }
 
 
-require('./web')
 client.login(token);
+
+// Graceful shutdown so `docker compose stop`/`down` and Ctrl+C exit cleanly.
+for (const signal of ['SIGINT', 'SIGTERM']) {
+	process.on(signal, async () => {
+		console.log(`Received ${signal}, shutting down...`);
+		await client.destroy();
+		process.exit(0);
+	});
+}

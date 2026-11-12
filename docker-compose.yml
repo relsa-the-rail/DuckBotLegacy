@@ -1,46 +1,34 @@
-version: '3.8'
-
-volumes:
-  duck-node_modules:
-    name: duck-node_modules
-    external: true
-  duck-mongo_data:
-    name: duck-mongo_data
-  duck-mongo_config:
-    name: duck-mongo_config
-  duck-mongo_configdb:
-    name: duck-mongo_configdb
-
 services:
   mongo_db:
     container_name: mongo_db
     image: mongo:5.0.2
     restart: unless-stopped
     volumes:
-        - 'duck-mongo_data:/data/db'
-        - 'duck-mongo_config:/data/config'
-        - 'duck-mongo_configdb:/data/configdb'
-    ports:
-      - '3306:27017'
+      - 'duck-mongo_data:/data/db'
+      - 'duck-mongo_config:/data/config'
+      - 'duck-mongo_configdb:/data/configdb'
     env_file:
       - app/.env
+    # Uncomment to reach the database from the host (e.g. `npm run dev`).
+    # ports:
+    #   - '27017:27017'
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     networks:
       - node-network
 
   duckbot:
     build:
       context: .
-      args:
-        GIT_TOKEN: $GIT_TOKEN
-    image:  ghcr.io/dead0duck/duckbot
+    image: duckbot
     container_name: duckbot
     volumes:
       - .:/home/container
       - duck-node_modules:/home/container/app/node_modules
-    ports:
-      - '80:80'
-      - '443:443'
-      - '4000:4000'
     stdin_open: true
     tty: true
     restart: unless-stopped
@@ -49,8 +37,15 @@ services:
     env_file:
       - app/.env
     depends_on:
-      - mongo_db
+      mongo_db:
+        condition: service_healthy
 
 networks:
   node-network:
     driver: bridge
+
+volumes:
+  duck-mongo_data:
+  duck-mongo_config:
+  duck-mongo_configdb:
+  duck-node_modules:
