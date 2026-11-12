@@ -85,11 +85,20 @@ async function CreateVoice(oldState, newState, guildData) {
 				{
 					id: member.id,
 					allow: [
-						PermissionFlagsBits.ViewChannel,
-					],
-				}
-			], topic: voiceChannel.id
-		})
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.SendMessages,
+          ],
+        },
+        {
+          id: member.id,
+          allow: [
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.SendMessages,
+          ],
+        },
+      ],
+      topic: voiceChannel.id,
+    });
 
 		const embed = new EmbedBuilder()
 			.setColor(0x00FFFF)
