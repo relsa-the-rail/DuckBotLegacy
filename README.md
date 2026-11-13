@@ -62,6 +62,20 @@ git pull
 docker compose up -d --build
 ```
 
+## Диагностика команд
+
+Проверить, что Discord на самом деле знает о командах (глобальных и по гильдиям),
+не запуская бота целиком:
+
+```sh
+docker compose exec duckbot npm run commands            # только показать
+docker compose exec duckbot npm run commands -- --register   # показать и перерегистрировать
+```
+
+Напоминание: **глобальные** команды (без `GUILD_ID`) появляются не сразу — до
+часа, плюс может понадобиться перезапуск клиента Discord. Команды **гильдии**
+(`GUILD_ID` задан) видны мгновенно — для разработки и личного бота это удобнее.
+
 ## Структура
 
 ```
@@ -71,6 +85,8 @@ docker compose up -d --build
 ├── eslint.config.js     конфиг ESLint
 ├── package.json
 ├── .env.default         шаблон переменных окружения
+├── scripts/
+│   └── status-commands.js  диагностика зарегистрированных команд
 └── src/
     ├── index.js            точка входа: загрузка команд, событий и взаимодействий
     ├── deploy-commands.js  регистрация слэш-команд в Discord

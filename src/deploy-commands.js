@@ -215,6 +215,9 @@ module.exports = (clientId) => {
 
 			const changes = describeChanges(current, commands)
 			console.log(`Updating application (/) commands for ${scope}:`, changes)
+			if (!guildId) {
+				console.log('Note: global commands can take up to an hour to appear (and the Discord client may need a reload). Set GUILD_ID for instant guild commands.')
+			}
 
 			const data = await rest.put(route, { body: commands })
 
