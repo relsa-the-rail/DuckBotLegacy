@@ -4,6 +4,8 @@ const { version } = require('../../package.json');
 
 module.exports = {
 	name: Events.ClientReady,
+	// Deploy commands and run startup once per process, not on every reconnect.
+	once: true,
 	execute: async (client) => {
 		console.log(`Ready! Looogged in as ${client.user.tag}`);
 
