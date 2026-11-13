@@ -141,17 +141,15 @@ function describeChanges(current, desired) {
 	}
 }
 
-module.exports = (clientId) => {
-	const { REST, Routes } = require('discord.js');
-	const guildId = process.env.GUILD_ID
-	const token = process.env.TOKEN
+/**
+ * Read every command file and split the SlashCommandBuilder#toJSON() output into
+ * the shared set and the per-guild "exclusive" sets. Used both for deployment
+ * and by scripts/status-commands.js so the desired set can be reported without
+ * duplicating this logic.
+ */
+function collectCommands() {
 	const fs = require('node:fs');
 	const path = require('node:path');
-
-	// Command ids by name, used to build clickable </command:id> mentions.
-	// Defined up-front so consumers (e.g. voiceStateUpdate) never read it
-	// while undefined.
-	process.disCmds = {}
 
 	const commandsExclusive = {};
 	const commands = [];
@@ -183,8 +181,26 @@ module.exports = (clientId) => {
 		}
 	}
 
-	// Construct and prepare an instance of the REST module
-	const rest = new REST().setToken(token);
+	return { commands, commandsExclusive }
+}
+
+module.exports = (clientId) => {
+	const { REST, Routes, RateLimitError } = require('discord.js');
+	const guildId = process.env.GUILD_ID
+	const token = process.env.TOKEN
+
+	// Command ids by name, used to build clickable </command:id> mentions.
+	// Defined up-front so consumers (e.g. voiceStateUpdate) never read it
+	// while undefined.
+	process.disCmds = {}
+
+	const { commands, commandsExclusive } = collectCommands()
+
+	// Reject on rate limit instead of letting the REST client silently sleep and
+	// retry: a global 429 can stall for a long time, and since deploy runs before
+	// the rest of ClientReady, a hidden wait would freeze startup. Rejecting turns
+	// it into a RateLimitError we can log and recover from.
+	const rest = new REST({ rejectOnRateLimit: () => true }).setToken(token);
 
 	function indexCommandIds(list) {
 		// Добавим идшники команд в процесс, чтобы легче было потом ссылаться на них в пингах.
@@ -192,6 +208,68 @@ module.exports = (clientId) => {
 		list.forEach(cmd => {
 			process.disCmds[cmd.name] = cmd.id
 		});
+	}
+
+	// Remove leftovers from the *other* scope. A global command and a guild
+	// command with the same name coexist in the picker, so registering in one
+	// scope has to drop the same-named commands from the other.
+	async function clearOtherScope() {
+		if (guildId) {
+			// Guild scope is active: wipe the global set (as before).
+			const globals = await rest.get(Routes.applicationCommands(clientId))
+			if (globals.length) {
+				await rest.put(Routes.applicationCommands(clientId), { body: [] })
+				console.log('Cleared leftover global application (/) commands.')
+			}
+			return
+		}
+
+		// Global scope is active: drop guild commands that shadow a global one.
+		const names = new Set(commands.map(command => command.name))
+		const guilds = await rest.get(Routes.userGuilds())
+		for (const guild of guilds) {
+			const guildCommands = await rest.get(Routes.applicationGuildCommands(clientId, guild.id))
+			const duplicates = guildCommands.filter(command => names.has(command.name))
+			if (!duplicates.length) continue
+
+			for (const duplicate of duplicates) {
+				await rest.delete(Routes.applicationGuildCommand(clientId, guild.id, duplicate.id))
+			}
+			console.log(`Cleared ${duplicates.length} leftover guild command(s) in ${guild.name} (${guild.id}): ${duplicates.map(command => command.name).join(', ')}`)
+		}
+	}
+
+	/**
+	 * Discord rate-limits global command writes far more strictly than guild
+	 * ones. Report it clearly and, when the wait looks sane, retry in the
+	 * background so a long wait doesn't block startup and the set still lands
+	 * without a restart.
+	 */
+	function handleRateLimit(route, body, scope, error) {
+		const waitMs = Number(error.timeToReset) || Number(error.retryAfter) || 0
+		const seconds = Math.ceil(waitMs / 1000)
+		console.warn(`[deploy-commands] Rate limited while registering ${scope} commands (429${error.global ? ' global' : ''}); Discord asked to retry in ~${seconds}s. Leaving the current set untouched.`)
+
+		// Only schedule a deferred retry for the global scope (guild writes are not
+		// this constrained) and only when the wait is within a reasonable window.
+		if (guildId || !(waitMs > 0) || waitMs > 60 * 60 * 1000) {
+			if (!guildId && waitMs > 60 * 60 * 1000) {
+				console.warn('[deploy-commands] Retry window is over an hour; not scheduling a deferred retry. Restart once the limit resets.')
+			}
+			return
+		}
+
+		const timer = setTimeout(async () => {
+			try {
+				const data = await rest.put(route, { body })
+				indexCommandIds(data)
+				console.log(`[deploy-commands] Deferred registration for ${scope} succeeded (${data.length} commands).`)
+			} catch (retryError) {
+				console.error('[deploy-commands] Deferred command registration failed:', retryError)
+			}
+		}, waitMs + 1000)
+		// Don't keep a one-shot script (npm run commands --register) alive for it.
+		timer.unref?.()
 	}
 
 	// and deploy your commands!
@@ -207,45 +285,61 @@ module.exports = (clientId) => {
 			// every startup. The PUT below still replaces the whole set atomically.
 			const current = await rest.get(route)
 
-			if (commandsEqual(current, commands)) {
+			let data = current
+			let activeUpToDate = commandsEqual(current, commands)
+
+			if (activeUpToDate) {
 				console.log(`Application (/) commands already up to date for ${scope}; skipping registration.`)
-				indexCommandIds(current)
-				return
-			}
+			} else {
+				console.log(`Updating application (/) commands for ${scope}:`, describeChanges(current, commands))
+				if (!guildId) {
+					console.log('Note: global commands can take up to an hour to appear (and the Discord client may need a reload). Set GUILD_ID for instant guild commands.')
+				}
 
-			const changes = describeChanges(current, commands)
-			console.log(`Updating application (/) commands for ${scope}:`, changes)
-			if (!guildId) {
-				console.log('Note: global commands can take up to an hour to appear (and the Discord client may need a reload). Set GUILD_ID for instant guild commands.')
-			}
-
-			const data = await rest.put(route, { body: commands })
-
-			// Clear commands left over in the other scope so they don't show up
-			// twice (a global and a guild command with the same name coexist).
-			if (guildId) {
-				const globals = await rest.get(Routes.applicationCommands(clientId))
-				if (globals.length) {
-					await rest.put(Routes.applicationCommands(clientId), { body: [] })
-					console.log('Cleared leftover global application (/) commands.')
+				try {
+					data = await rest.put(route, { body: commands })
+					activeUpToDate = true
+				} catch (error) {
+					if (error instanceof RateLimitError) {
+						handleRateLimit(route, commands, scope, error)
+						data = current
+					} else {
+						throw error
+					}
 				}
 			}
 
-			if (Object.keys(commandsExclusive).length > 0) {
-				for (const [key, value] of Object.entries(commandsExclusive)) {
-					const guildData = await rest.put(
-						Routes.applicationGuildCommands(clientId, key),
-						{ body: value },
-					);
+			// Only reconcile the other scope once the active one is known good, so a
+			// failed (e.g. rate-limited) write never deletes the working commands.
+			if (activeUpToDate) {
+				await clearOtherScope()
 
-					console.log(`Successfully reloaded ${guildData.length} application (/) exclusive commands for guild ${key}.`);
-				};
+				if (Object.keys(commandsExclusive).length > 0) {
+					for (const [key, value] of Object.entries(commandsExclusive)) {
+						const guildData = await rest.put(
+							Routes.applicationGuildCommands(clientId, key),
+							{ body: value },
+						);
+
+						console.log(`Successfully reloaded ${guildData.length} application (/) exclusive commands for guild ${key}.`);
+					};
+				}
 			}
 
 			indexCommandIds(data)
-			console.log(`Successfully reloaded ${data.length} application (/) commands.`);
+			if (activeUpToDate) {
+				console.log(`Application (/) commands in ${scope} are up to date (${data.length}).`);
+			}
 		} catch (error) {
-			console.error('[deploy-commands] Failed to register application commands:', error);
+			if (error instanceof RateLimitError) {
+				console.warn(`[deploy-commands] Rate limited while registering commands (429${error.global ? ' global' : ''}); the current set is left as-is.`)
+			} else {
+				console.error('[deploy-commands] Failed to register application commands:', error);
+			}
 		}
 	})();
 }
+
+// Exposed so diagnostics (scripts/status-commands.js) can report the set the bot
+// would deploy without duplicating the discovery logic.
+module.exports.collectCommands = collectCommands
